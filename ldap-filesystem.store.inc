@@ -53,6 +53,9 @@ include_once "ldap-filesystem.store.config.php";
 // Inclusion of the Net_LDAP2 package:
 require_once 'Net/LDAP2.php';
 
+include_once "dynalogin-filesystem.store.config.php";
+include_once DYNALOGIN_PHP_DIR . "/dynalogin.php";
+
 /**
  * This variable is a cache of SimpleID's application settings.  It is populated
  * progressively as {@link store_get()} is called.
@@ -184,6 +187,28 @@ function store_user_verify_credentials($uid, $credentials) {
             $credentials);
     }
 
+    if($test_user['auth_method'] == "DYNALOGIN") {
+        return filesystem_user_verify_dynalogin($uid, $test_user,
+            $credentials);
+    }
+
+    if($test_user['auth_method'] == "MULTI") {
+
+        /* if(filesystem_user_verify_static_password($uid, $test_user,
+            $credentials))
+            return true; */
+
+        if(filesystem_user_verify_ldap($uid, $test_user, $credentials))
+            return true;
+
+        /* We check dynalogin last in order to avoid hammering the
+           login failure counter and because it is a more intensive
+           operation than LDAP */
+        if(filesystem_user_verify_dynalogin($uid, $test_user, $credentials))
+            return true;
+
+    }
+
     return false;
 }
 
@@ -287,6 +312,26 @@ function filesystem_user_verify_ldap($uid, $test_user, $credentials) {
     $ldap->done();
 
     return $authenticated;
+}
+
+/**
+ * Verifies a user who use dynalogin two-factor authentication
+ * @param string $uid the user id
+ * @param array $test_user the user
+ * @param array $credentials the credentials supplied by the browser
+ */
+function filesystem_user_verify_dynalogin($uid, $test_user, $credentials) {
+    $dynalogin_user = $uid;
+    if(isset($test_user['dynalogin_user']))
+        $dynalogin_user = $test_user['dynalogin_user'];
+
+    if(DYNALOGIN_SERVER_NAME == '' || DYNALOGIN_SERVER_PORT < 0)
+        return false;
+
+    return (dynalogin_auth($dynalogin_user, $credentials['pass'],
+        DYNALOGIN_SERVER_NAME, DYNALOGIN_SERVER_PORT) == 1);
+
+    return false;
 }
 
 /**
