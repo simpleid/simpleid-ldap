@@ -53,6 +53,10 @@ include_once "ldap-filesystem.store.config.php";
 // Inclusion of the Net_LDAP2 package:
 require_once 'Net/LDAP2.php';
 
+// Inclusion of the Config_Lite package for writing identity files
+require_once 'Config/Lite.php';
+
+
 /**
  * This variable is a cache of SimpleID's application settings.  It is populated
  * progressively as {@link store_get()} is called.
@@ -167,11 +171,18 @@ function store_user_updated_time($uid, $type = NULL) {
  * user
  */
 function store_user_verify_credentials($uid, $credentials) {
-    $allowed_algorithms = array('md5', 'sha1');
     
     $test_user = user_load($uid);
     
-    if ($test_user == NULL) return false;
+    if ($test_user == NULL) {
+      if (filesystem_user_verify_ldap($uid, $test_user,
+            $credentials)) {
+        create_identity_file($uid);
+        return true;
+      }else{
+        return false;
+      }
+    }
 
     if(!isset($test_user['auth_method']) ||
       $test_user['auth_method'] == "STATIC") {
@@ -194,6 +205,7 @@ function store_user_verify_credentials($uid, $credentials) {
  * @param array $credentials the credentials supplied by the browser
  */
 function filesystem_user_verify_static_password($test_user, $credentials) {
+    $allowed_algorithms = array('md5', 'sha1');
     $hash_function_salt = explode(':', $test_user['pass'], 3);
     
     $hash = $hash_function_salt[0];
@@ -484,4 +496,20 @@ function store_del($name) {
 function _store_is_valid_name($name) {
     return preg_match('!\A[^/\\\\]*\z!', $name);
 }
+
+/**
+ * If no identity file exists for the uid given for a valid ldap user
+ * create a minimal one.
+ *
+ * @param the string uid the username to create the file
+ *
+ *
+ */
+function create_identity_file($uid){
+    $config = new Config_Lite(SIMPLEID_IDENTITIES_DIR.'/'.$uid.'.identity');
+    $config->set(null, 'identity', SIMPLEID_BASE_URL)
+	->set(null, 'auth_method', 'LDAP');
+    $config->save();
+}
+
 ?>
