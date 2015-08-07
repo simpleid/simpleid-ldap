@@ -1,0 +1,25 @@
+Source: simpleid-ldap
+Section: web
+Priority: extra
+Maintainer: Debian Authentication Maintainers <pkg-auth-maintainers@lists.alioth.debian.org>
+Uploaders: Daniel Pocock <daniel@pocock.com.au>
+Build-Depends: debhelper (>= 9), cdbs (>= 0.4.89)
+Standards-Version: 3.9.4
+Homepage: https://github.com/simpleid/simpleid-ldap
+Vcs-Git: git://git.debian.org/pkg-auth/simpleid-ldap.git
+Vcs-Browser: http://git.debian.org/?p=pkg-auth/simpleid-ldap.git;a=summary
+
+Package: simpleid-ldap
+Architecture: all
+Depends: debconf | debconf-2.0, apache2 | lighttpd | httpd,
+   libapache2-mod-php5, libjs-jquery, simpleid, php-net-ldap2, ${misc:Depends}
+Description: simple OpenID provider implemented in PHP - LDAP plugin
+ SimpleID is a simple, personal OpenID provider written in PHP.  OpenID
+ is a way to provide for a single digital identity across the Internet.
+ To get an OpenID you need to sign up to an OpenID provider, who acts as
+ the "custodian" of your digital identity. Every time you want to log into
+ an OpenID-enabled web site, you will be redirected to your OpenID provider,
+ who will then verify your identity and provide this to the web site.
+ .
+ This plugin provides support for authenticating user passwords using
+ an LDAP server rather than the default flat files supported by SimpleID.

@@ -1,0 +1,2 @@
+ldap-filesystem.store.inc usr/share/simpleid/www
+debian/conf/* etc/simpleid

@@ -1,0 +1,25 @@
+
+SimpleID LDAP plugin
+--------------------
+
+Please see the excellent documentation included in the upstream
+README file
+
+Please also see the README.Debian file from SimpleID:
+
+   /usr/share/doc/simpleid/README.Debian
+
+for specific details about how SimpleID is deployed on Debian,
+where config files and identity files are located, etc.
+
+Quickstart
+----------
+
+You MUST modify
+
+  /etc/simpleid/ldap-filesystem.store.config.php
+
+to include the hostname or LDAP URL of your LDAP server, and your
+base DN.
+
+

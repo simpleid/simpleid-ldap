@@ -1,0 +1,26 @@
+
+Debian packaging is:
+
+  Copyright (C) 2012 Daniel Pocock <daniel@pocock.com.au>
+  and is licensed under the GPL version 3, found in
+  /usr/share/common-licenses/GPL-3
+  on your Debian system.
+
+SimpleID-LDAP upstream distribution:
+
+  Copyright 2011 Kelvin Mo <kmo@users.sourceforge.net>
+  Copyright 2012 Daniel Pocock <daniel@pocock.com.au>
+  and is licensed under the GPL version 3, found in
+  /usr/share/common-licenses/GPL-3
+  on your Debian system.
+
+  This code is based on a plugin API from the SimpleID package,
+  the API is:
+
+  Copyright 2011 Kelvin Mo <kmo@users.sourceforge.net>
+  GNU General Public License v2
+
+  The full license text can be found in
+  /usr/share/common-licenses/GPL-2 
+
+
