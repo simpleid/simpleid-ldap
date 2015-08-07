@@ -1,3 +1,10 @@
+simpleid-ldap (1.0.1-1) unstable; urgency=low
+
+  * New upstream release.
+  * Stop using short version of PHP tag in sample config. (Closes: #794664)
+
+ -- Daniel Pocock <daniel@pocock.pro>  Fri, 07 Aug 2015 09:55:21 +0200
+
 simpleid-ldap (1.0.0-2) unstable; urgency=low
 
   * Update Homepage location (Closes: #673969)
