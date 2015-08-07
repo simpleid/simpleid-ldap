@@ -4,7 +4,7 @@ Installation
 ------------
 
 a) copy the two files to your simpleID PHP directory (wherever the
-   other simpleID *.inc files are kept)
+   other simpleID *.php files are kept)
 
 b) rename the config file
 
@@ -12,7 +12,7 @@ b) rename the config file
 
 c) edit the config file, specify the LDAP server name and LDAP_BASE_DN
 
-d) modify the main simpleID config file, config.inc, and change
+d) modify the main simpleID config file, config.php, and change
    the store parameter like so:
 
       define('SIMPLEID_STORE', 'ldap-filesystem');
