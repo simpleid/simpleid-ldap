@@ -1,0 +1,9 @@
+
+Contributions from other developers are welcome, instead of making an
+NMU, please consider joining pkg-auth
+
+Whether you are making an NMU or adding yourself in the pkg-auth
+team, please make sure any changes you make are pushed into the
+Git repository on alioth before you upload and then make a tag
+and push that too.
+
