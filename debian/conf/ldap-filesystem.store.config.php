@@ -1,4 +1,4 @@
-<?
+<?php
 /**
  * The LDAP server name and TCP port.
  *
