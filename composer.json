@@ -11,7 +11,7 @@
     ],
     "require": {
         "simpleid/module-installer": "*",
-        "pear-pear.php.net/Net_LDAP2": "*"
+        "pear-pear.php.net/Net_LDAP2": "2.*"
     },
     "license": "GPL-2.0+",
     "authors": [
