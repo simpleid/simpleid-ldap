@@ -3,6 +3,7 @@
  * SimpleID
  *
  * Copyright (C) Kelvin Mo 2014
+ * Copyright (C) Daniel Pocock 2012
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
