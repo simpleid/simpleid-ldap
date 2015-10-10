@@ -22,9 +22,6 @@
 
 namespace SimpleID\Modules\LDAP;
 
-use \Net_LDAP2;
-use \Net_LDAP2_Filter;
-use \PEAR;
 use Psr\Log\LogLevel;
 use SimpleID\Store\StoreModule;
 use SimpleID\Models\User;
@@ -35,25 +32,24 @@ use SimpleID\Models\User;
  */
 class LDAPStoreModule extends StoreModule {
 
-    protected $config;
+    protected $ldap_config;
+
+    protected $attribute_map = array(
+        'dn' => 'ldap.dn',
+        'uid' => 'uid',
+        'cn' => 'userinfo.name',
+        'mail' => 'email'
+    );
 
     public function __construct() {
         parent::__construct();
-        $this->config = $this->f3->get('config');
 
-        $this->checkConfig();
-    }
-
-    protected function checkConfig() {
-        if (!is_dir($this->config['identities_dir'])) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::CRITICAL, 'Identities directory not found.');
-            $this->f3->error(500, $this->t('Identities directory not found.  See the <a href="!url">manual</a> for instructions on how to set up SimpleID.', array('!url' => 'http://simpleid.koinic.net/docs/2/installing/')));
+        if (!$this->f3->exists('config.ldap.host') || !$this->f3->exists('config.ldap.port') || !$this->f3->exists('config.ldap.basedn')) {
+            $this->f3->get('logger')->log(\Psr\Log\LogLevel::CRITICAL, 'LDAP configuration parameters not found.');
+            $this->f3->error(500, $this->t('LDAP configuration parameters host, port or basedn not found'));
         }
 
-        if (!is_dir($this->config['store_dir']) || !is_writeable($this->config['store_dir'])) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::CRITICAL, 'Store directory not found or not writeable.');
-            $this->f3->error(500, $this->t('Store directory not found or not writeable.  See the <a href="!url">manual</a> for instructions on how to set up SimpleID.', array('!url' => 'http://simpleid.koinic.net/docs/2/installing/')));
-        }
+        $this->ldap_config = $this->f3->get('config.ldap');
     }
 
     public function getStores() {
@@ -99,44 +95,52 @@ class LDAPStoreModule extends StoreModule {
      * @return User the item or null if no item is found
      */
     protected function findUser($criteria, $value) {
-        $cache = \Cache::instance();
-        $index = $cache->get('users_' . rawurldecode($criteria) . '.storeindex');
-        if ($index === false) $index = array();
-        if (isset($index[$value])) return $index[$value];
-
         $result = NULL;
 
-        $dir = opendir($this->config['identities_dir']);
-
-        while (($file = readdir($dir)) !== false) {
-            $filename = $this->config['identities_dir'] . '/' . $file;
-
-            if (is_link($filename)) $filename = readlink($filename);
-            if ((filetype($filename) != "file") || (!preg_match('/^(.+)\.user\.yml$/', $file, $matches))) continue;
-
-            $uid = $matches[1];
-            $test_user = $this->readUser($uid);
-
-            $test_value = $test_user->pathGet($criteria);
-
-            if ($test_value !== null) {
-                if (is_array($test_value)) {
-                    foreach ($test_value as $test_element) {
-                        if (trim($test_element) != '') $index[$test_element] = $uid;
-                        if ($test_element == $value) $result = $uid;
-                    }
-                } else {
-                    if (trim($test_value) != '') {
-                        $index[$test_value] = $uid;
-                        if ($test_value == $value) $result = $uid;
-                    }
-                }
+        $cn = $this->ldapConnect();
+        if ($cn) {
+            if ($criteria == 'uid') {
+                $filter = $this->getLDAPFilter($uid);
+            } else {
+                $filter_map = array_flip($this->attribute_map);
+                if (!isset($filter_map[$criteria])) return null;
+                $filter = $filter_map[$criteria] . '=' . $value;
             }
+
+            $search = @ldap_search($cn, $this->ldap_config['basedn'], $filter, array_keys('uid', 'mail'));
+            if (!$search) return null;
+            
+            $count = @ldap_count_entries($cn, $search);
+            if($count == 0) {
+                $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, "No matches");
+            } elseif ($count > 1) {
+                $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, "Multiple matches");
+            }
+
+            if ($count != 1) {
+                @ldap_free_result($search);
+                $this->ldapDisconnect($cn);
+                return null;
+            }
+
+            $entry = ldap_first_entry($cn, $search);
+            if (!$entry) {
+                $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when retrieving search results: ' . ldap_error($cn));
+                @ldap_free_result($search);
+                $this->ldapDisconnect($cn);
+                return null;
+            }
+
+            $attrs = ldap_get_attributes($cn, $entry);
+            if ($attrs['uid']) {
+                $result = $attrs['uid'][0];
+            } elseif ($attrs['mail']) {
+                $result = $attrs['mail'][0];
+            }
+
+            @ldap_free_result($search);
+            $this->ldapDisconnect($cn);
         }
-
-        closedir($dir);
-
-        $cache->set('users_' . rawurldecode($criteria) . '.storeindex', $index);
 
         return $result;
     }
@@ -148,12 +152,16 @@ class LDAPStoreModule extends StoreModule {
      * @return bool whether the user name exists
      */
     protected function hasUser($uid) {
-        if ($this->isValidName($uid)) {
-            $identity_file = $this->config['identities_dir'] . "/$uid.user.yml";
-            return (file_exists($identity_file));
-        } else {
-            return false;
+        $cn = $this->ldapConnect();
+        if ($cn) {
+            $search = @ldap_search($cn, $this->ldap_config['basedn'], $this->getLDAPFilter($uid), array('dn'));
+            if (!$search) return false;
+            $result = (@ldap_count_entries($cn, $search) === 1);
+            @ldap_free_result($result);
+            $this->ldapDisconnect($cn);
+            return $result;
         }
+        return false;
     }
 
     /**
@@ -166,24 +174,90 @@ class LDAPStoreModule extends StoreModule {
      * @return User data for the specified user
      */
     protected function readUser($uid) {
-        if (!$this->isValidName($uid) || !$this->hasUser($uid)) return null;
+        if (!$this->hasUser($uid)) return null;
 
-        $user = $this->readSavedUserData($uid);
+        $cn = $this->ldapConnect();
+        if ($cn) {
+            $search = @ldap_search($cn, $this->ldap_config['basedn'], $this->getLDAPFilter($uid), array_keys($this->attribute_map));
+            if (!$search) return null;
+            
+            $count = @ldap_count_entries($cn, $search);
+            if($count == 0) {
+                $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, "No matches for $uid");
+            } elseif ($count > 1) {
+                $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, "Multiple matches for $uid");
+            }
 
-        $identity_file = $this->config['identities_dir'] . "/$uid.user.yml";
+            if ($count != 1) {
+                @ldap_free_result($search);
+                $this->ldapDisconnect($cn);
+                return null;
+            }
 
-        try {
-            $data =Spyc::YAMLLoad($identity_file);
-        } catch (Exception $e) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Cannot read user file ' . $identity_file . ': ' . $e->getMessage());
-            trigger_error('Cannot read user file ' . $identity_file . ': ' . $e->getMessage(), E_USER_ERROR);
+            $entry = ldap_first_entry($cn, $search);
+            if (!$entry) {
+                $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when retrieving search results: ' . ldap_error($cn));
+                @ldap_free_result($search);
+                $this->ldapDisconnect($cn);
+                return null;
+            }
+
+            $user = new User();
+            $attrs = ldap_get_attributes($cn, $entry);
+            for ($i = 0; $i < $attrs['count']; $i++) {
+                $attr = $attrs[$i];
+                if (isset($this->attribute_map[$attr])) {
+                    $user->pathSet($this->attribute_map[$attr], $attrs[$attr][0]);
+                }
+            }
+            $user->pathSet('ldap.auth', true);
+
+            @ldap_free_result($search);
+            $this->ldapDisconnect($cn);
+            return $user;
         }
 
-        if ($data != null) $user->loadData($data);
-
-        return $user;
+        return null;
     }
 
+    protected function ldapConnect() {
+        $cn = @ldap_connect($this->ldap_config['host'], $this->ldap_config['port']);
+        if (!$cn) {
+            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server');
+            return false;
+        }
+
+        ldap_set_option($cn, LDAP_OPT_PROTOCOL_VERSION, 3);
+        ldap_set_option($cn, LDAP_OPT_REFERRALS, 0);
+
+        if (isset($this->ldap_config['starttls']) && $this->ldap_config['starttls']) {
+            $result = @ldap_start_tls($cn);
+            if (!$result) {
+                $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server: ' . ldap_error($cn));
+                return false;
+            }
+        }
+
+        $result = @ldap_bind($cn);
+        if (!$result) {
+            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server: ' . ldap_error($cn));
+            return false;
+        }
+
+        return $cn;
+    }
+
+    protected function ldapDisconnect($cn) {
+        @ldap_unbind($cn);
+    }
+
+    protected function getLDAPFilter($uid) {
+        $ldap_attr = 'uid';
+        if(strpos($uid, '@')) {
+            $ldap_attr = 'mail';
+        }
+        return $ldap_attr . '=' . $uid;
+    }
 }
 
 ?>
