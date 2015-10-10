@@ -22,9 +22,6 @@
 
 namespace SimpleID\Modules\LDAP;
 
-use \Net_LDAP2;
-use \Net_LDAP2_Filter;
-use \PEAR;
 use Psr\Log\LogLevel;
 use SimpleID\Auth\PasswordAuthSchemeModule;
 use SimpleID\Store\StoreManager;
@@ -40,8 +37,6 @@ use SimpleID\Store\StoreManager;
  * supported.
  */
 class LDAPAuthSchemeModule extends PasswordAuthSchemeModule {
-
-    protected $ldap_cfg;
 
     public function __construct() {
         parent::__construct();
@@ -84,63 +79,73 @@ class LDAPAuthSchemeModule extends PasswordAuthSchemeModule {
             $ldap_attr = 'mail';
         }
 
-        $starttls = ($this->f3->exists('config.ldap.starttls')) ? $this->f3->get('config.ldap.starttls') : false;
-
-        $ldap_cfg = array (
-            'host' => $this->f3->get('config.ldap.host'),
-            'port' => $this->f3->get('config.ldap.port'),
-            'version' => 3,
-            'starttls' => $starttls,
-            'basedn' => $this->f3->get('config.ldap.basedn')
-        );
-
-        $ldap = Net_LDAP2::connect($ldap_cfg);
-
-        // Testing for connection error
-        if (PEAR::isError($ldap)) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server: ' . $ldap->getMessage());
+        $cn = @ldap_connect($this->f3->get('config.ldap.host'), $this->f3->get('config.ldap.port'));
+        if (!$cn) {
+            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server');
             return false;
         }
 
-        $filter = Net_LDAP2_Filter::create($ldap_attr, 'equals', $uid);
-        $requested_attributes = array('dn');
-        $ldap_res = $ldap->search(null, $filter,
-            array('attributes' => $requested_attributes));
-        if (Net_LDAP2::isError($ldap_res)) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when searching LDAP server: ' . $ldap_res->getMessage());
-            $ldap->done();
+        ldap_set_option($cn, LDAP_OPT_PROTOCOL_VERSION, 3);
+        ldap_set_option($cn, LDAP_OPT_REFERRALS, 0);
+
+        if ($this->f3->exists('config.ldap.starttls') && $this->f3->get('config.ldap.starttls')) {
+            $result = @ldap_start_tls($cn);
+            if (!$result) {
+                $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server: ' . ldap_error($cn));
+                return false;
+            }
+        }
+
+        $result = @ldap_bind($cn);
+        if (!$result) {
+            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server: ' . ldap_error($cn));
             return false;
         }
 
-        if($ldap_res->count() == 0) {
+        $search = @ldap_search($cn, $this->f3->get('config.ldap.basedn'), $ldap_attr . '=' . $uid, array('dn'));
+        if (!$search) {
+            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when searching LDAP server: ' . ldap_error($cn));
+            @ldap_unbind($cn);
+            return false;
+        }
+
+        $count = @ldap_count_entries($cn, $search);
+        if($count == 0) {
             $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, "No matches for $ldap_attr = $uid");
-        } else if($ldap_res->count() > 1) {
+        } elseif ($count > 1) {
             $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, "Multiple matches for $ldap_attr = $uid");
         }
 
-        if ($ldap_res->count() != 1) {
-            $ldap_res->done();
-            $ldap->done();
+        if ($count != 1) {
+            @ldap_free_result($search);
+            @ldap_unbind($cn);
             return false;
         }
 
-        $ldap_entry = $ldap_res->shiftEntry();
-        $ldap_dn = $ldap_entry->dn();
-        if (Net_LDAP2::isError($ldap_dn)) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when retrieving search results:', $ldap_dn->getMessage());
-            $ldap_res->done();
-            $ldap->done();
+        $entry = ldap_first_entry($cn, $search);
+        if (!$entry) {
+            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when retrieving search results: ' . ldap_error($cn));
+            @ldap_free_result($search);
+            @ldap_unbind($cn);
             return false;
         }
 
-        $ldap_rebind = $ldap->bind($ldap_dn, $credentials['password']['password']);
-        if (Net_LDAP2::isError($ldap_rebind)) {            
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::WARNING, 'LDAP bind failure:', $ldap_rebind->getMessage());
+        $ldap_dn = ldap_get_dn($cn, $entry);
+        if (!$ldap_dn) {
+            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when retrieving search results: ' . ldap_error($cn));
+            @ldap_free_result($search);
+            @ldap_unbind($cn);
             return false;
         }
 
-        $ldap_res->done();
-        $ldap->done();
+        $result = @ldap_bind($cn, $ldap_dn, $credentials['password']['password']);
+        if (!$result) {            
+            $this->f3->get('logger')->log(\Psr\Log\LogLevel::WARNING, 'Cannot bind using user name and password: ' . ldap_error($cn));
+            return false;
+        }
+
+        @ldap_free_result($search);
+        @ldap_unbind($cn);
 
         return true;
     }

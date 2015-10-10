@@ -3,15 +3,9 @@
     "type": "simpleid-module",
     "description": "SimpleID modules for authenticating user passwords using an LDAP server.",
     "homepage": "https://github.com/simpleid/simpleid-ldap",
-    "repositories": [
-        {
-            "type": "pear",
-            "url": "https://pear.php.net"
-        }
-    ],
     "require": {
+        "ext-ldap": "*",
         "simpleid/module-installer": "*",
-        "pear-pear.php.net/Net_LDAP2": "2.*"
     },
     "license": "GPL-2.0+",
     "authors": [
