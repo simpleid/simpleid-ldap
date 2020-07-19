@@ -103,7 +103,7 @@ class LDAPAuthSchemeModule extends PasswordAuthSchemeModule {
             return false;
         }
 
-        $search = @ldap_search($cn, $this->f3->get('config.ldap.basedn'), $ldap_attr . '=' . $uid, array('dn'));
+        $search = @ldap_search($cn, $this->f3->get('config.ldap.basedn'), $ldap_attr . '=' . $uid, [ 'dn' ]);
         if (!$search) {
             $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when searching LDAP server: ' . ldap_error($cn));
             @ldap_unbind($cn);
@@ -155,7 +155,7 @@ class LDAPAuthSchemeModule extends PasswordAuthSchemeModule {
      * @see SimpleID\API\AuthHooks::secretUserDataPathsHook()
      */
     public function secretUserDataPathsHook() {
-        return array('ldap.auth');
+        return [ 'ldap.auth' ];
     }
 }
 ?>

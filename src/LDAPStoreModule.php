@@ -34,12 +34,12 @@ class LDAPStoreModule extends StoreModule {
 
     protected $ldap_config;
 
-    protected $attribute_map = array(
+    protected $attribute_map = [
         'dn' => 'ldap.dn',
         'uid' => 'uid',
         'cn' => 'userinfo.name',
         'mail' => 'email'
-    );
+    ];
 
     public function __construct() {
         parent::__construct();
@@ -53,7 +53,7 @@ class LDAPStoreModule extends StoreModule {
     }
 
     public function getStores() {
-        return array('user:read');
+        return [ 'user:read' ];
     }
 
     public function find($type, $criteria, $value) {
@@ -154,7 +154,7 @@ class LDAPStoreModule extends StoreModule {
     protected function hasUser($uid) {
         $cn = $this->ldapConnect();
         if ($cn) {
-            $search = @ldap_search($cn, $this->ldap_config['basedn'], $this->getLDAPFilter($uid), array('dn'));
+            $search = @ldap_search($cn, $this->ldap_config['basedn'], $this->getLDAPFilter($uid), [ 'dn' ]);
             if (!$search) return false;
             $result = (@ldap_count_entries($cn, $search) === 1);
             @ldap_free_result($result);
