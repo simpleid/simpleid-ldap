@@ -26,6 +26,7 @@ namespace SimpleID\Modules\LDAP;
 use Psr\Log\LogLevel;
 use SimpleID\Auth\PasswordAuthSchemeModule;
 use SimpleID\Store\StoreManager;
+use SimpleID\Util\Events\BaseDataCollectionEvent;
 
 /**
  * Password-based authentication scheme.
@@ -43,7 +44,7 @@ class LDAPAuthSchemeModule extends PasswordAuthSchemeModule {
         parent::__construct();
 
         if (!$this->f3->exists('config.ldap.host') || !$this->f3->exists('config.ldap.port') || !$this->f3->exists('config.ldap.basedn')) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::CRITICAL, 'LDAP configuration parameters not found.');
+            $this->logger->log(\Psr\Log\LogLevel::CRITICAL, 'LDAP configuration parameters not found.');
             $this->f3->error(500, $this->t('LDAP configuration parameters host, port or basedn not found'));
         }
     }
@@ -82,7 +83,7 @@ class LDAPAuthSchemeModule extends PasswordAuthSchemeModule {
 
         $cn = @ldap_connect($this->f3->get('config.ldap.host'), $this->f3->get('config.ldap.port'));
         if (!$cn) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server');
+            $this->logger->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server');
             return false;
         }
 
@@ -92,29 +93,29 @@ class LDAPAuthSchemeModule extends PasswordAuthSchemeModule {
         if ($this->f3->exists('config.ldap.starttls') && $this->f3->get('config.ldap.starttls')) {
             $result = @ldap_start_tls($cn);
             if (!$result) {
-                $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server: ' . ldap_error($cn));
+                $this->logger->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server: ' . ldap_error($cn));
                 return false;
             }
         }
 
         $result = @ldap_bind($cn);
         if (!$result) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server: ' . ldap_error($cn));
+            $this->logger->log(\Psr\Log\LogLevel::ERROR, 'Could not connect to LDAP server: ' . ldap_error($cn));
             return false;
         }
 
         $search = @ldap_search($cn, $this->f3->get('config.ldap.basedn'), $ldap_attr . '=' . $uid, [ 'dn' ]);
         if (!$search) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when searching LDAP server: ' . ldap_error($cn));
+            $this->logger->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when searching LDAP server: ' . ldap_error($cn));
             @ldap_unbind($cn);
             return false;
         }
 
         $count = @ldap_count_entries($cn, $search);
         if($count == 0) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, "No matches for $ldap_attr = $uid");
+            $this->logger->log(\Psr\Log\LogLevel::ERROR, "No matches for $ldap_attr = $uid");
         } elseif ($count > 1) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, "Multiple matches for $ldap_attr = $uid");
+            $this->logger->log(\Psr\Log\LogLevel::ERROR, "Multiple matches for $ldap_attr = $uid");
         }
 
         if ($count != 1) {
@@ -125,7 +126,7 @@ class LDAPAuthSchemeModule extends PasswordAuthSchemeModule {
 
         $entry = ldap_first_entry($cn, $search);
         if (!$entry) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when retrieving search results: ' . ldap_error($cn));
+            $this->logger->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when retrieving search results: ' . ldap_error($cn));
             @ldap_free_result($search);
             @ldap_unbind($cn);
             return false;
@@ -133,7 +134,7 @@ class LDAPAuthSchemeModule extends PasswordAuthSchemeModule {
 
         $ldap_dn = ldap_get_dn($cn, $entry);
         if (!$ldap_dn) {
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when retrieving search results: ' . ldap_error($cn));
+            $this->logger->log(\Psr\Log\LogLevel::ERROR, 'Error occurred when retrieving search results: ' . ldap_error($cn));
             @ldap_free_result($search);
             @ldap_unbind($cn);
             return false;
@@ -141,7 +142,7 @@ class LDAPAuthSchemeModule extends PasswordAuthSchemeModule {
 
         $result = @ldap_bind($cn, $ldap_dn, $credentials['password']['password']);
         if (!$result) {            
-            $this->f3->get('logger')->log(\Psr\Log\LogLevel::WARNING, 'Cannot bind using user name and password: ' . ldap_error($cn));
+            $this->logger->log(\Psr\Log\LogLevel::WARNING, 'Cannot bind using user name and password: ' . ldap_error($cn));
             return false;
         }
 
@@ -151,11 +152,9 @@ class LDAPAuthSchemeModule extends PasswordAuthSchemeModule {
         return true;
     }
 
-    /**
-     * @see SimpleID\API\AuthHooks::secretUserDataPathsHook()
-     */
-    public function secretUserDataPathsHook() {
-        return [ 'ldap.auth' ];
+    public function onUserSecretDataPaths(BaseDataCollectionEvent $event) {
+        parent::onUserSecretDataPaths($event);
+        $event->addResult('ldap.auth');
     }
 }
 ?>
