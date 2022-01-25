@@ -5,7 +5,7 @@
     "homepage": "https://github.com/simpleid/simpleid-ldap",
     "require": {
         "ext-ldap": "*",
-        "simpleid/module-installer": "*",
+        "simpleid/module-installer": "^2.0",
     },
     "license": "GPL-2.0+",
     "authors": [
